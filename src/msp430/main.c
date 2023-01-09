@@ -22,6 +22,37 @@ void serputs(const char *s)
         serput(*s++);
 }
 
+zf_result do_eval(const char *buf)
+{
+	const char *msg = NULL;
+
+	zf_result rv = zf_eval(buf);
+
+	switch(rv)
+	{
+		case ZF_OK: break;
+		case ZF_ABORT_INTERNAL_ERROR: msg = "internal error"; break;
+		case ZF_ABORT_OUTSIDE_MEM: msg = "outside memory"; break;
+		case ZF_ABORT_DSTACK_OVERRUN: msg = "dstack overrun"; break;
+		case ZF_ABORT_DSTACK_UNDERRUN: msg = "dstack underrun"; break;
+		case ZF_ABORT_RSTACK_OVERRUN: msg = "rstack overrun"; break;
+		case ZF_ABORT_RSTACK_UNDERRUN: msg = "rstack underrun"; break;
+		case ZF_ABORT_NOT_A_WORD: msg = "not a word"; break;
+		case ZF_ABORT_COMPILE_ONLY_WORD: msg = "compile-only word"; break;
+		case ZF_ABORT_INVALID_SIZE: msg = "invalid size"; break;
+		case ZF_ABORT_DIVISION_BY_ZERO: msg = "division by zero"; break;
+		default: msg = "unknown error";
+	}
+
+	if(msg) {
+            serputs(msg);
+            serputs("\r\n");
+	}
+
+	return rv;
+}
+
+
 int main(void)
 {
     WDTCTL = WDTPW | WDTHOLD;
@@ -44,7 +75,7 @@ int main(void)
     static const char *zforth = "zforth\n\r";
     serputs(zforth);
 
-    char buf[16];
+    char buf[64];
     char *ptr = buf;
     for (;;) {
         if (IFG2 & UCA0RXIFG) {
@@ -54,9 +85,9 @@ int main(void)
             if (c == '\r') {
                 *ptr = '\0';
 
-                zf_result r = zf_eval(buf);
+                serput(' ');
+                do_eval(buf);
                 serputs(zforth + 6);
-                serput((r == ZF_OK) ? 'O' : 'E');
 
                 ptr = buf;
             } else {
@@ -64,23 +95,33 @@ int main(void)
             }
         }
     }
-
-    //zf_eval(": . 1 sys ;");
 }
 
+static void printint(int n)
+{
+    char buf[16];
+    char *ptr = buf;
+
+    do {
+        *ptr++ = n % 10 + '0';
+    } while ((n /= 10));
+
+    do {
+        serput(*ptr--);
+    } while (ptr >= buf);
+    serput(' ');
+}
 
 zf_input_state zf_host_sys(zf_syscall_id id, const char *input)
 {
     switch((int)id) {
-
         case ZF_SYSCALL_EMIT:
             serput(zf_pop());
             break;
 
-        //case ZF_SYSCALL_PRINT:
-        //    itoa(zf_pop(), buf, 10);
-        //    puts(buf);
-        //    break;
+        case ZF_SYSCALL_PRINT:
+            printint(zf_pop());
+            break;
     }
 
     return 0;

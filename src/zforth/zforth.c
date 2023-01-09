@@ -69,6 +69,10 @@ static zf_cell rstack[ZF_RSTACK_SIZE];
 static zf_cell dstack[ZF_DSTACK_SIZE];
 static uint8_t dict[ZF_DICT_SIZE];
 
+#if ZF_ENABLE_PREBUILT_BOOTSTRAP
+#include ZF_PREBUILT_BOOTSTRAP
+#endif
+
 /* State and stack and interpreter pointers */
 
 static zf_input_state input_state;
@@ -232,7 +236,13 @@ static zf_addr dict_put_bytes(zf_addr addr, const void *buf, size_t len)
 {
 	const uint8_t *p = (const uint8_t *)buf;
 	size_t i = len;
+#if ZF_ENABLE_PREBUILT_BOOTSTRAP
+	CHECK(addr >= core_save_len, ZF_ABORT_OUTSIDE_MEM);
+	CHECK(addr < core_save_len+ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
+        addr -= core_save_len;
+#else
 	CHECK(addr < ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
+#endif
 	while(i--) dict[addr++] = *p++;
 	return len;
 }
@@ -241,8 +251,21 @@ static zf_addr dict_put_bytes(zf_addr addr, const void *buf, size_t len)
 static void dict_get_bytes(zf_addr addr, void *buf, size_t len)
 {
 	uint8_t *p = (uint8_t *)buf;
+#if ZF_ENABLE_PREBUILT_BOOTSTRAP
+	CHECK(addr < core_save_len+ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
+#else
 	CHECK(addr < ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
-	while(len--) *p++ = dict[addr++];
+#endif
+        while(len--) {
+#if ZF_ENABLE_PREBUILT_BOOTSTRAP
+            if (addr < core_save_len)
+	        *p++ = core_save[addr++];
+            else
+	        *p++ = dict[addr++ - core_save_len];
+#else
+            *p++ = dict[addr++];
+#endif
+        }
 }
 
 
@@ -429,7 +452,8 @@ static int find_word(const char *name, zf_addr *word, zf_addr *code)
 		p += dict_get_cell(p, &link);
 		len = ZF_FLAG_LEN((int)d);
 		if(len == namelen) {
-			const char *name2 = (const char *)&dict[p];
+                        char name2[len + 1];
+                        dict_get_bytes(p, name2, len + 1);
 			if(memcmp(name, name2, len) == 0) {
 				*word = w;
 				*code = p + len;
@@ -853,9 +877,14 @@ static void handle_char(char c)
 
 void zf_init(int enable_trace)
 {
+#if ZF_ENABLE_PREBUILT_BOOTSTRAP
+	HERE = core_save_len + ZF_USERVAR_COUNT * sizeof(zf_addr);
+	LATEST = core_save_latest;
+#else
 	HERE = ZF_USERVAR_COUNT * sizeof(zf_addr);
-	TRACE = enable_trace;
 	LATEST = 0;
+#endif
+	TRACE = enable_trace;
 	dsp = 0;
 	rsp = 0;
 	COMPILING = 0;

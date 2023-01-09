@@ -1,6 +1,9 @@
 #ifndef zfconf
 #define zfconf
 
+#define ZF_ENABLE_PREBUILT_BOOTSTRAP 1
+#define ZF_PREBUILT_BOOTSTRAP "core.h"
+
 /* Set to 1 to add tracing support for debugging and inspection. Requires the
  * zf_host_trace() function to be implemented. Adds about one kB to .text and
  * .rodata, dramatically reduces speed, but is very useful. Make sure to enable
