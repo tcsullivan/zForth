@@ -237,9 +237,9 @@ static zf_addr dict_put_bytes(zf_addr addr, const void *buf, size_t len)
 	const uint8_t *p = (const uint8_t *)buf;
 	size_t i = len;
 #if ZF_ENABLE_PREBUILT_BOOTSTRAP
-	CHECK(addr >= core_save_len, ZF_ABORT_OUTSIDE_MEM);
-	CHECK(addr < core_save_len+ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
-        addr -= core_save_len;
+	CHECK(addr >= zforth_save_len, ZF_ABORT_OUTSIDE_MEM);
+	CHECK(addr < zforth_save_len+ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
+        addr -= zforth_save_len;
 #else
 	CHECK(addr < ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
 #endif
@@ -252,16 +252,16 @@ static void dict_get_bytes(zf_addr addr, void *buf, size_t len)
 {
 	uint8_t *p = (uint8_t *)buf;
 #if ZF_ENABLE_PREBUILT_BOOTSTRAP
-	CHECK(addr < core_save_len+ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
+	CHECK(addr < zforth_save_len+ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
 #else
 	CHECK(addr < ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
 #endif
         while(len--) {
 #if ZF_ENABLE_PREBUILT_BOOTSTRAP
-            if (addr < core_save_len)
-	        *p++ = core_save[addr++];
+            if (addr < zforth_save_len)
+	        *p++ = zforth_save[addr++];
             else
-	        *p++ = dict[addr++ - core_save_len];
+	        *p++ = dict[addr++ - zforth_save_len];
 #else
             *p++ = dict[addr++];
 #endif
@@ -878,8 +878,8 @@ static void handle_char(char c)
 void zf_init(int enable_trace)
 {
 #if ZF_ENABLE_PREBUILT_BOOTSTRAP
-	HERE = core_save_len + ZF_USERVAR_COUNT * sizeof(zf_addr);
-	LATEST = core_save_latest;
+	HERE = zforth_save_len + ZF_USERVAR_COUNT * sizeof(zf_addr);
+	LATEST = zforth_save_latest;
 #else
 	HERE = ZF_USERVAR_COUNT * sizeof(zf_addr);
 	LATEST = 0;

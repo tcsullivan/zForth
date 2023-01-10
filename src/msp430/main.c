@@ -6,6 +6,7 @@
 #include <msp430g2553.h>
 
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "zforth.h"
@@ -75,7 +76,7 @@ int main(void)
     static const char *zforth = "zforth\n\r";
     serputs(zforth);
 
-    char buf[64];
+    static char buf[64];
     char *ptr = buf;
     for (;;) {
         if (IFG2 & UCA0RXIFG) {
@@ -85,11 +86,13 @@ int main(void)
             if (c == '\r') {
                 *ptr = '\0';
 
-                serput(' ');
+                serputs(zforth + 6);
                 do_eval(buf);
                 serputs(zforth + 6);
 
                 ptr = buf;
+            } else if (c == '\b') {
+                --ptr;
             } else {
                 *ptr++ = c;
             }
@@ -99,12 +102,19 @@ int main(void)
 
 static void printint(int n)
 {
-    char buf[16];
+    char buf[12];
     char *ptr = buf;
+    bool neg = n < 0;
+
+    if (neg)
+        n = -n;
 
     do {
         *ptr++ = n % 10 + '0';
     } while ((n /= 10));
+
+    if (neg)
+        serput('-');
 
     do {
         serput(*ptr--);
@@ -122,6 +132,18 @@ zf_input_state zf_host_sys(zf_syscall_id id, const char *input)
         case ZF_SYSCALL_PRINT:
             printint(zf_pop());
             break;
+
+        case ZF_SYSCALL_USER + 0: { // : peek8 128 sys ;
+            // byte peek
+            uint8_t *p = (uint8_t *)zf_pop();
+            zf_push(*p);
+            } break;
+
+        case ZF_SYSCALL_USER + 1: { // : poke8 129 sys ;
+            // byte poke
+            uint8_t *p = (uint8_t *)zf_pop();
+            *p = zf_pop();
+            } break;
     }
 
     return 0;

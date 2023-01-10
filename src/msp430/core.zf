@@ -1,0 +1,87 @@
+
+( system calls )
+
+: emit    0 sys ;
+: .       1 sys ;
+: peek    128 sys ;
+: poke    129 sys ;
+
+
+( dictionary access. These are shortcuts through the primitive operations are !!, @@ and ,, )
+
+: !    0 !! ;
+: @    0 @@ ;
+: ,    0 ,, ;
+: #    0 ## ;
+
+
+( compiler state )
+
+: [ 0 compiling ! ; immediate
+: ] 1 compiling ! ;
+: postpone 1 _postpone ! ; immediate
+
+
+( some operators and shortcuts )
+: 1+ 1 + ;
+: 1- 1 - ;
+: over 1 pick ;
+: +!   dup @ rot + swap ! ;
+: <    - <0 ;
+: >    swap < ;
+: <=   over over = rot rot < | ;
+: >=   swap <= ;
+: 0=   0 = ;
+: <>   = 0= ;
+: cr   10 emit ;
+: here h @ ;
+
+
+( memory management )
+
+: allot h +!  ;
+: const : ' lit , , postpone ; ;
+: var   here 2 allot const ;
+
+( 'begin' gets the current address, a jump or conditional jump back is generated
+  by 'again', 'until' )
+
+: begin   here ; immediate
+: again   ' jmp , , ; immediate
+: until   ' jmp0 , , ; immediate
+
+
+( 'if' prepares conditional jump, address will be filled in by 'else' or 'then' )
+
+: if      ' jmp0 , here 999 , ; immediate
+: unless  ' 0= , postpone if ; immediate
+: else    ' jmp , here 999 , swap here swap ! ; immediate
+: then    here swap ! ; immediate
+
+
+( forth style 'do' and 'loop', including loop iterators 'i' and 'j' )
+
+: i ' lit , 0 , ' pickr , ; immediate
+: j ' lit , 2 , ' pickr , ; immediate
+: do ' swap , ' >r , ' >r , here ; immediate
+: loop+ ' r> , ' + , ' dup , ' >r , ' lit , 1 , ' pickr , ' > , ' jmp0 , , ' r> , ' drop , ' r> , ' drop , ; immediate
+: loop ' lit , 1 , postpone loop+ ;  immediate
+
+
+( Create string literal, puts length and address on the stack )
+
+: s" compiling @ if ' lits , here 0 , then here begin key dup 34 = if drop
+     compiling @ if here swap - swap ! else dup here swap - then exit else , then
+     again ; immediate
+
+( Print string literal )
+
+( : ." compiling @ if postpone s" ' tell , else begin key dup 34 = if drop exit else emit then again )
+     ( then ; immediate )
+
+
+(
+vi: ts=3 sw=3 ft=forth
+)
+
+

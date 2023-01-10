@@ -20,8 +20,8 @@ LDFLAGS	+= -g
 LDFLAGS	+= -mmcu=msp430g2553
 LDFLAGS	+= -Wl,-gc-sections
 
-CFLAGS  += -flto
-LDFLAGS += -flto
+CFLAGS  += -flto -fstack-usage
+LDFLAGS += -flto -fstack-usage
 
 $(HEX): $(BIN)
 	msp430-elf32-objcopy -j .text -j .data -O ihex $< $@
