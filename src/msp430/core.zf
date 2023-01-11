@@ -16,11 +16,10 @@
 
 ( system calls )
 
-: emit    0 sys ;
-: .       1 sys ;
-: peek    128 sys ;
-: poke    129 sys ;
-: reg     dup rot rot 130 sys swap h @ swap - h ! ;
+: emit  0 sys ;
+: .     1 sys ;
+: @r    128 sys ;
+: !r    129 sys ;
 
 
 ( some operators and shortcuts )
@@ -65,7 +64,7 @@
 : i ' lit , 0 , ' pickr , ; immediate
 : j ' lit , 2 , ' pickr , ; immediate
 : do ' swap , ' >r , ' >r , here ; immediate
-: loop+ ' r> , ' + , ' dup , ' >r , ' lit , 1 , ' pickr , ' > , ' jmp0 , , ' r> , ' drop , ' r> , ' drop , ; immediate
+: loop+ ' r> , ' + , ' dup , ' >r , ' lit , 1 , ' pickr , ' = , ' jmp0 , , ' r> , ' drop , ' r> , ' drop , ; immediate
 : loop ' lit , 1 , postpone loop+ ;  immediate
 
 

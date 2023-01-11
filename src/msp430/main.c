@@ -12,10 +12,15 @@
 
 #include "zforth.h"
 
+static const unsigned char *regs = (unsigned char *)
+#include "regs_data.h"
+    ;
+
 static void serput(int c);
 static void serputs(const char *s);
 static void printint(int n, char *buf);
 
+static zf_cell lookup_reg(const char *buf);
 static zf_result do_eval(const char *buf);
 
 int main(void)
@@ -59,7 +64,7 @@ int main(void)
                 ptr = buf;
             } else if (c == '\b') {
                 --ptr;
-            } else {
+            } else if (ptr < buf + sizeof(buf)) {
                 *ptr++ = c;
             }
         }
@@ -99,31 +104,6 @@ void printint(int n, char *buf)
     serput(' ');
 }
 
-static const unsigned char *regs = (unsigned char *)
-#include "regs_data.h"
-    ;
-
-static zf_cell lookup_reg(char *buf, zf_addr addr, zf_cell len)
-{
-    dict_get_bytes(addr, buf, len);
-
-    const unsigned char *ptr = regs;
-    zf_cell ret = 0;
-
-    while (*ptr) {
-        if (*ptr == len) {
-            if (memcmp(ptr + 1, buf, (unsigned)len) == 0) {
-                ret = ptr[len + 1] | (ptr[len + 2] << 8);
-                break;
-            }
-        }
-
-        ptr += *ptr + 3;
-    }
-
-    return ret;
-}
-
 zf_input_state zf_host_sys(zf_syscall_id id, const char *input)
 {
     static char buf[12];
@@ -147,11 +127,6 @@ zf_input_state zf_host_sys(zf_syscall_id id, const char *input)
             // byte poke
             uint8_t *p = (uint8_t *)zf_pop();
             *p = zf_pop();
-            } break;
-
-        case ZF_SYSCALL_USER + 2: {
-            int len = zf_pop();
-            zf_push(lookup_reg(buf, zf_pop(), len));
             } break;
     }
 
@@ -192,10 +167,12 @@ zf_cell zf_host_parse_num(const char *buf)
     int c;
     bool neg = false;
 
-    if (buf[0] == '-')
-        neg = true, buf = buf + 1;
+    if (isalpha((int)buf[0]))
+	return lookup_reg(buf);
     else if (buf[0] == '0' && buf[1] == 'x')
         return zf_host_parse_num_hex(buf + 2);
+    else if (buf[0] == '-')
+        neg = true, buf = buf + 1;
 
     while ((c = *buf)) {
         if (isspace(c)) {
@@ -211,6 +188,22 @@ zf_cell zf_host_parse_num(const char *buf)
     }
 
     return neg ? -n : n;
+}
+
+zf_cell lookup_reg(const char *buf)
+{
+    const unsigned char *ptr = regs;
+    while (*ptr) {
+	unsigned len = (unsigned)*ptr;
+
+        if (memcmp(ptr + 1, buf, len) == 0 && buf[len] == '\0')
+            return ptr[len + 1] | (ptr[len + 2] << 8);
+
+        ptr += *ptr + 3;
+    }
+
+    zf_abort(ZF_ABORT_NOT_A_WORD);
+    return 0;
 }
 
 zf_result do_eval(const char *buf)
