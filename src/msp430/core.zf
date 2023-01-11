@@ -1,12 +1,4 @@
 
-( system calls )
-
-: emit    0 sys ;
-: .       1 sys ;
-: peek    128 sys ;
-: poke    129 sys ;
-
-
 ( dictionary access. These are shortcuts through the primitive operations are !!, @@ and ,, )
 
 : !    0 !! ;
@@ -20,6 +12,15 @@
 : [ 0 compiling ! ; immediate
 : ] 1 compiling ! ;
 : postpone 1 _postpone ! ; immediate
+
+
+( system calls )
+
+: emit    0 sys ;
+: .       1 sys ;
+: peek    128 sys ;
+: poke    129 sys ;
+: reg     dup rot rot 130 sys swap h @ swap - h ! ;
 
 
 ( some operators and shortcuts )

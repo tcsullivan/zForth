@@ -8,8 +8,63 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "zforth.h"
+
+static void serput(int c);
+static void serputs(const char *s);
+static void printint(int n, char *buf);
+
+static zf_result do_eval(const char *buf);
+
+int main(void)
+{
+    static char buf[64];
+
+    WDTCTL = WDTPW | WDTHOLD;
+    DCOCTL = 0;
+    BCSCTL1 = CALBC1_1MHZ;
+    DCOCTL = CALDCO_1MHZ;
+
+    P1SEL |= BIT1 | BIT2;
+    P1SEL2 |= BIT1 | BIT2;
+
+    UCA0CTL1 = UCSWRST;
+    UCA0CTL1 |= UCSSEL_2;
+    UCA0BR0 = 104;
+    UCA0BR1 = 0;
+    UCA0MCTL = UCBRS0;
+    UCA0CTL1 &= ~UCSWRST;
+
+    zf_init(0);
+
+    serputs("zforth   ");
+    printint(ZF_DICT_SIZE, buf);
+    serputs(" bytes\n\r");
+
+    char *ptr = buf;
+    for (;;) {
+        if (IFG2 & UCA0RXIFG) {
+            char c = UCA0RXBUF;
+            serput(c);
+
+            if (c == '\r') {
+                *ptr = '\0';
+
+                serputs("\n\r");
+                do_eval(buf);
+                serputs("\n\r");
+
+                ptr = buf;
+            } else if (c == '\b') {
+                --ptr;
+            } else {
+                *ptr++ = c;
+            }
+        }
+    }
+}
 
 void serput(int c)
 {
@@ -21,6 +76,141 @@ void serputs(const char *s)
 {
     while (*s)
         serput(*s++);
+}
+
+void printint(int n, char *buf)
+{
+    char *ptr = buf;
+    bool neg = n < 0;
+
+    if (neg)
+        n = -n;
+
+    do {
+        *ptr++ = n % 10 + '0';
+    } while ((n /= 10));
+
+    if (neg)
+        serput('-');
+
+    do {
+        serput(*--ptr);
+    } while (ptr > buf);
+    serput(' ');
+}
+
+static const unsigned char *regs = (unsigned char *)
+#include "regs_data.h"
+    ;
+
+static zf_cell lookup_reg(char *buf, zf_addr addr, zf_cell len)
+{
+    dict_get_bytes(addr, buf, len);
+
+    const unsigned char *ptr = regs;
+    zf_cell ret = 0;
+
+    while (*ptr) {
+        if (*ptr == len) {
+            if (memcmp(ptr + 1, buf, (unsigned)len) == 0) {
+                ret = ptr[len + 1] | (ptr[len + 2] << 8);
+                break;
+            }
+        }
+
+        ptr += *ptr + 3;
+    }
+
+    return ret;
+}
+
+zf_input_state zf_host_sys(zf_syscall_id id, const char *input)
+{
+    static char buf[12];
+
+    switch((int)id) {
+        case ZF_SYSCALL_EMIT:
+            serput(zf_pop());
+            break;
+
+        case ZF_SYSCALL_PRINT:
+            printint(zf_pop(), buf);
+            break;
+
+        case ZF_SYSCALL_USER + 0: { // : peek8 128 sys ;
+            // byte peek
+            uint8_t *p = (uint8_t *)zf_pop();
+            zf_push(*p);
+            } break;
+
+        case ZF_SYSCALL_USER + 1: { // : poke8 129 sys ;
+            // byte poke
+            uint8_t *p = (uint8_t *)zf_pop();
+            *p = zf_pop();
+            } break;
+
+        case ZF_SYSCALL_USER + 2: {
+            int len = zf_pop();
+            zf_push(lookup_reg(buf, zf_pop(), len));
+            } break;
+    }
+
+    return 0;
+}
+
+zf_cell zf_host_parse_num_hex(const char *buf)
+{
+    zf_cell n = 0;
+    int c;
+
+    while ((c = *buf)) {
+        if (isspace(c)) {
+            break;
+        } else if (c >= 'a' && c <= 'f') {
+            c -= 32; // assume ascii...
+            c -= 65 - 10;
+        } else if (c >= 'A' && c <= 'F') {
+            c -= 65 - 10;
+        } else if (!isdigit(c)) {
+            zf_abort(ZF_ABORT_NOT_A_WORD);
+            n = 0;
+            break;
+        } else {
+            c -= '0';
+        }
+
+        n = n * 16 + c;
+        ++buf;
+    }
+
+    return n;
+}
+
+zf_cell zf_host_parse_num(const char *buf)
+{
+    zf_cell n = 0;
+    int c;
+    bool neg = false;
+
+    if (buf[0] == '-')
+        neg = true, buf = buf + 1;
+    else if (buf[0] == '0' && buf[1] == 'x')
+        return zf_host_parse_num_hex(buf + 2);
+
+    while ((c = *buf)) {
+        if (isspace(c)) {
+            break;
+        } else if (!isdigit(c)) {
+            zf_abort(ZF_ABORT_NOT_A_WORD);
+            n = 0;
+            break;
+        }
+
+        n = n * 10 + c - '0';
+        ++buf;
+    }
+
+    return neg ? -n : n;
 }
 
 zf_result do_eval(const char *buf)
@@ -51,124 +241,6 @@ zf_result do_eval(const char *buf)
 	}
 
 	return rv;
-}
-
-
-int main(void)
-{
-    WDTCTL = WDTPW | WDTHOLD;
-    DCOCTL = 0;
-    BCSCTL1 = CALBC1_1MHZ;
-    DCOCTL = CALDCO_1MHZ;
-
-    P1SEL |= BIT1 | BIT2;
-    P1SEL2 |= BIT1 | BIT2;
-
-    UCA0CTL1 = UCSWRST;
-    UCA0CTL1 |= UCSSEL_2;
-    UCA0BR0 = 104;
-    UCA0BR1 = 0;
-    UCA0MCTL = UCBRS0;
-    UCA0CTL1 &= ~UCSWRST;
-
-    zf_init(0);
-
-    static const char *zforth = "zforth\n\r";
-    serputs(zforth);
-
-    static char buf[64];
-    char *ptr = buf;
-    for (;;) {
-        if (IFG2 & UCA0RXIFG) {
-            char c = UCA0RXBUF;
-            serput(c);
-
-            if (c == '\r') {
-                *ptr = '\0';
-
-                serputs(zforth + 6);
-                do_eval(buf);
-                serputs(zforth + 6);
-
-                ptr = buf;
-            } else if (c == '\b') {
-                --ptr;
-            } else {
-                *ptr++ = c;
-            }
-        }
-    }
-}
-
-static void printint(int n)
-{
-    char buf[12];
-    char *ptr = buf;
-    bool neg = n < 0;
-
-    if (neg)
-        n = -n;
-
-    do {
-        *ptr++ = n % 10 + '0';
-    } while ((n /= 10));
-
-    if (neg)
-        serput('-');
-
-    do {
-        serput(*ptr--);
-    } while (ptr >= buf);
-    serput(' ');
-}
-
-zf_input_state zf_host_sys(zf_syscall_id id, const char *input)
-{
-    switch((int)id) {
-        case ZF_SYSCALL_EMIT:
-            serput(zf_pop());
-            break;
-
-        case ZF_SYSCALL_PRINT:
-            printint(zf_pop());
-            break;
-
-        case ZF_SYSCALL_USER + 0: { // : peek8 128 sys ;
-            // byte peek
-            uint8_t *p = (uint8_t *)zf_pop();
-            zf_push(*p);
-            } break;
-
-        case ZF_SYSCALL_USER + 1: { // : poke8 129 sys ;
-            // byte poke
-            uint8_t *p = (uint8_t *)zf_pop();
-            *p = zf_pop();
-            } break;
-    }
-
-    return 0;
-}
-
-
-zf_cell zf_host_parse_num(const char *buf)
-{
-    zf_cell n = 0;
-    int c;
-
-    while ((c = *buf)) {
-        if (isspace(c)) {
-            break;
-        } else if (!isdigit(c)) {
-            zf_abort(ZF_ABORT_NOT_A_WORD);
-            n = 0;
-            break;
-        }
-
-        n = n * 10 + c - '0';
-        ++buf;
-    }
-
-    return n;
 }
 
 

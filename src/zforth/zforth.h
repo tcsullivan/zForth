@@ -70,6 +70,8 @@ zf_cell zf_pick(zf_addr n);
 zf_result zf_uservar_set(zf_uservar_id uv, zf_cell v);
 zf_result zf_uservar_get(zf_uservar_id uv, zf_cell *v);
 
+void dict_get_bytes(zf_addr addr, void *buf, size_t len);
+
 /* Host provides these functions */
 
 zf_input_state zf_host_sys(zf_syscall_id id, const char *last_word);

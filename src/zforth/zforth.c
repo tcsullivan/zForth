@@ -107,7 +107,7 @@ static zf_addr *uservar = (zf_addr *)dict;
 
 static void do_prim(zf_prim prim, const char *input);
 static zf_addr dict_get_cell(zf_addr addr, zf_cell *v);
-static void dict_get_bytes(zf_addr addr, void *buf, size_t len);
+void dict_get_bytes(zf_addr addr, void *buf, size_t len);
 
 
 /* Tracing functions. If disabled, the trace() function is replaced by an empty
@@ -248,7 +248,7 @@ static zf_addr dict_put_bytes(zf_addr addr, const void *buf, size_t len)
 }
 
 
-static void dict_get_bytes(zf_addr addr, void *buf, size_t len)
+void dict_get_bytes(zf_addr addr, void *buf, size_t len)
 {
 	uint8_t *p = (uint8_t *)buf;
 #if ZF_ENABLE_PREBUILT_BOOTSTRAP
@@ -452,8 +452,8 @@ static int find_word(const char *name, zf_addr *word, zf_addr *code)
 		p += dict_get_cell(p, &link);
 		len = ZF_FLAG_LEN((int)d);
 		if(len == namelen) {
-                        char name2[len + 1];
-                        dict_get_bytes(p, name2, len + 1);
+                        char name2[len];
+                        dict_get_bytes(p, name2, len);
 			if(memcmp(name, name2, len) == 0) {
 				*word = w;
 				*code = p + len;
