@@ -2,11 +2,11 @@
 
 This is a customized port of zForth for the MSP430, a 16-bit microcontroller with minimal memory.
 
-This specifically targets the MSP430G2553, or other MSP430 family members with at least 512 bytes of RAM and 8 kilobytes of ROM.
+This specifically targets the MSP430G2553 or other MSP430 family members with at least 512 bytes of RAM and 8 kilobytes of ROM.
 
 Satisfying these constraints primarily required adding a read-only dictionary that contains the bootstrap, core functionality (modified to better conform with ANS Forth), and other helpful words. MSP430 registers can also be referenced by name.
 
-Through these changes, zForth is made available over UART with 220 bytes of dictionary RAM and 16 bytes each for the data and return stacks.
+Through these changes, zForth is made available over UART with 220 bytes of dictionary RAM and 16 cells each for the data and return stacks.
 
 ```
 \ Configure P1.0 and P1.6 for output:
