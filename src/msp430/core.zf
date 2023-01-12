@@ -20,6 +20,15 @@
 : .     1 sys ;
 : @r    128 sys ;
 : !r    129 sys ;
+: bye   130 sys ;
+: inv   131 sys ;
+
+
+( register operations )
+
+: set dup @r rot | swap !r ;
+: clr dup @r rot inv & swap !r ;
+: tgl dup @r rot ^ swap !r ;
 
 
 ( some operators and shortcuts )

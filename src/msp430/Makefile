@@ -14,8 +14,8 @@ CFLAGS	+= -I. -I../zforth
 AFLAGS	+= -mmcu=msp430g2553
 
 CFLAGS	+= -mmcu=msp430g2553
-CFLAGS	+= -Os -g -std=c11 -MMD
-CFLAGS	+= -Wall -Wextra -Werror -Wno-unused-parameter -Wno-clobbered -Wno-unused-result
+CFLAGS	+= -Os -g -std=c99 -MMD
+CFLAGS	+= -Wall -Wextra -Werror -pedantic
 CFLAGS	+= -ffunction-sections -fdata-sections
 
 LDFLAGS	+= -g

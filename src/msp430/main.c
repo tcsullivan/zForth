@@ -21,11 +21,11 @@ static void serputs(const char *s);
 static void printint(int n, char *buf);
 
 static zf_cell lookup_reg(const char *buf);
-static zf_result do_eval(const char *buf);
+static zf_result do_eval(char *buf);
 
 int main(void)
 {
-    static char buf[64];
+    static char buf[48];
 
     WDTCTL = WDTPW | WDTHOLD;
     DCOCTL = 0;
@@ -40,7 +40,7 @@ int main(void)
     UCA0BR0 = 104;
     UCA0BR1 = 0;
     UCA0MCTL = UCBRS0;
-    UCA0CTL1 &= ~UCSWRST;
+    UCA0CTL1 &= (uint8_t)~UCSWRST;
 
     zf_init(0);
 
@@ -63,8 +63,11 @@ int main(void)
 
                 ptr = buf;
             } else if (c == '\b') {
-                --ptr;
+                if (ptr > buf)
+                    --ptr;
             } else if (ptr < buf + sizeof(buf)) {
+                if (c >= 'A' && c <= 'Z')
+                    c += 32;
                 *ptr++ = c;
             }
         }
@@ -92,7 +95,7 @@ void printint(int n, char *buf)
         n = -n;
 
     do {
-        *ptr++ = n % 10 + '0';
+        *ptr++ = (char)(n % 10) + '0';
     } while ((n /= 10));
 
     if (neg)
@@ -106,6 +109,8 @@ void printint(int n, char *buf)
 
 zf_input_state zf_host_sys(zf_syscall_id id, const char *input)
 {
+    (void)input;
+
     static char buf[12];
 
     switch((int)id) {
@@ -117,17 +122,27 @@ zf_input_state zf_host_sys(zf_syscall_id id, const char *input)
             printint(zf_pop(), buf);
             break;
 
-        case ZF_SYSCALL_USER + 0: { // : peek8 128 sys ;
+        case ZF_SYSCALL_USER + 0:
             // byte peek
-            uint8_t *p = (uint8_t *)zf_pop();
-            zf_push(*p);
-            } break;
+            zf_push(*((uint8_t *)zf_pop()));
+            break;
 
-        case ZF_SYSCALL_USER + 1: { // : poke8 129 sys ;
+        case ZF_SYSCALL_USER + 1: {
             // byte poke
             uint8_t *p = (uint8_t *)zf_pop();
-            *p = zf_pop();
+            *p = (uint8_t)zf_pop();
             } break;
+
+        case ZF_SYSCALL_USER + 2:
+            // reset zForth (clear RAM dictionary)
+            zf_init(0);
+	    zf_pushr(0);
+            break;
+
+        case ZF_SYSCALL_USER + 3:
+            // bitwise inversion
+            zf_push(-zf_pop() - 1);
+            break;
     }
 
     return 0;
@@ -206,7 +221,7 @@ zf_cell lookup_reg(const char *buf)
     return 0;
 }
 
-zf_result do_eval(const char *buf)
+zf_result do_eval(char *buf)
 {
 	const char *msg = NULL;
 

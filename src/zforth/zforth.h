@@ -60,12 +60,13 @@ typedef enum {
 void zf_init(int trace);
 void zf_bootstrap(void);
 void *zf_dump(size_t *len);
-zf_result zf_eval(const char *buf);
+zf_result zf_eval(char *buf);
 void zf_abort(zf_result reason);
 
 void zf_push(zf_cell v);
 zf_cell zf_pop(void);
 zf_cell zf_pick(zf_addr n);
+void zf_pushr(zf_cell v);
 
 zf_result zf_uservar_set(zf_uservar_id uv, zf_cell v);
 zf_result zf_uservar_get(zf_uservar_id uv, zf_cell *v);

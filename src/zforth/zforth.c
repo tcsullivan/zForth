@@ -102,6 +102,9 @@ static const char uservar_names[] =
 
 static zf_addr *uservar = (zf_addr *)dict;
 
+static char *handle_char_start = NULL;
+static size_t handle_char_len = 0;
+
 
 /* Prototypes */
 
@@ -157,8 +160,8 @@ static const char *op_name(zf_addr addr)
 }
 
 #else
-static void trace(const char *fmt, ...) { }
-static const char *op_name(zf_addr addr) { return NULL; }
+static void trace(const char *fmt, ...) { (void)fmt; }
+static const char *op_name(zf_addr addr) { (void)addr; return NULL; }
 #endif
 
 
@@ -203,7 +206,7 @@ zf_cell zf_pick(zf_addr n)
 }
 
 
-static void zf_pushr(zf_cell v)
+void zf_pushr(zf_cell v)
 {
 	CHECK(rsp < ZF_RSTACK_SIZE, ZF_ABORT_RSTACK_OVERRUN);
 	trace("r»" ZF_CELL_FMT " ", v);
@@ -247,6 +250,17 @@ static zf_addr dict_put_bytes(zf_addr addr, const void *buf, size_t len)
 	return len;
 }
 
+static const uint8_t *dict_get_addr(zf_addr addr)
+{
+#if ZF_ENABLE_PREBUILT_BOOTSTRAP
+        if (addr < zforth_save_len)
+            return zforth_save + addr;
+        else
+            return dict + addr - zforth_save_len;
+#else
+        return dict + addr;
+#endif
+}
 
 static void dict_get_bytes(zf_addr addr, void *buf, size_t len)
 {
@@ -256,15 +270,10 @@ static void dict_get_bytes(zf_addr addr, void *buf, size_t len)
 #else
 	CHECK(addr < ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
 #endif
+
+        const uint8_t *daddr = dict_get_addr(addr);
         while(len--) {
-#if ZF_ENABLE_PREBUILT_BOOTSTRAP
-            if (addr < zforth_save_len)
-	        *p++ = zforth_save[addr++];
-            else
-	        *p++ = dict[addr++ - zforth_save_len];
-#else
-            *p++ = dict[addr++];
-#endif
+            *p++ = *daddr++;
         }
 }
 
@@ -452,8 +461,7 @@ static int find_word(const char *name, zf_addr *word, zf_addr *code)
 		p += dict_get_cell(p, &link);
 		len = ZF_FLAG_LEN((int)d);
 		if(len == namelen) {
-                        char name2[len];
-                        dict_get_bytes(p, name2, len);
+                        const char *name2 = (const char *)dict_get_addr(p);
 			if(memcmp(name, name2, len) == 0) {
 				*word = w;
 				*code = p + len;
@@ -844,30 +852,39 @@ static void handle_word(const char *buf)
  * char to a deferred prim if it requested a character from the input stream
  */
 
-static void handle_char(char c)
+static void handle_char(char *buf, size_t i)
 {
-	static char buf[32];
-	static size_t len = 0;
-
 	if(input_state == ZF_INPUT_PASS_CHAR) {
 
 		input_state = ZF_INPUT_INTERPRET;
-		run(&c);
+		run(buf + i);
 
-	} else if(c != '\0' && !isspace(c)) {
+        } else {
+                if (handle_char_start == NULL) {
+                    handle_char_start = buf;
+                    handle_char_len = 0;
+                }
 
-		if(len < sizeof(buf)-1) {
-			buf[len++] = c;
-			buf[len] = '\0';
-		}
-
-	} else {
-
-		if(len > 0) {
-			len = 0;
-			handle_word(buf);
-		}
-	}
+                if (buf[i] == '\0') {
+                    if (handle_char_len > 0) {
+                        handle_char_start[handle_char_len] = '\0';
+                        handle_word(handle_char_start);
+                    }
+                    handle_char_start = NULL;
+                    handle_char_len = 0;
+                } else if (isspace((int)buf[i])) {
+                    if (handle_char_len > 0) {
+                        handle_char_start[handle_char_len] = '\0';
+                        handle_word(handle_char_start);
+                        handle_char_start[handle_char_len] = ' ';
+                        handle_char_start += handle_char_len;
+                        handle_char_len = 0;
+                    }
+                    handle_char_start ++;
+                } else {
+                    handle_char_len ++;
+	        }
+        }
 }
 
 
@@ -947,22 +964,23 @@ void zf_bootstrap(void) {}
  * Eval forth string
  */
 
-zf_result zf_eval(const char *buf)
+zf_result zf_eval(char *buf)
 {
 	zf_result r = (zf_result)setjmp(jmpbuf);
 
 	if(r == ZF_OK) {
-		for(;;) {
-			handle_char(*buf);
-			if(*buf == '\0') {
+		for(size_t i = 0; ; ++i) {
+			handle_char(buf, i);
+			if(buf[i] == '\0') {
 				return ZF_OK;
 			}
-			buf ++;
 		}
 	} else {
 		COMPILING = 0;
 		rsp = 0;
 		dsp = 0;
+                handle_char_start = NULL;
+                handle_char_len = 0;
 		return r;
 	}
 }

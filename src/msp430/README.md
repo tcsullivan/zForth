@@ -6,20 +6,20 @@ This specifically targets the MSP430G2553 or other MSP430 family members with at
 
 Satisfying these constraints primarily required adding a read-only dictionary that contains the bootstrap, core functionality (modified to better conform with ANS Forth), and other helpful words. MSP430 registers can also be referenced by name.
 
-Through these changes, zForth is made available over UART with 220 bytes of dictionary RAM and 16 cells each for the data and return stacks.
+Through these changes, zForth is made available over UART with 300 bytes of dictionary RAM and 12 cells each for the data and return stacks.
 
 ```
+0x01 const led1
+0x40 const led2
+
 \ Configure P1.0 and P1.6 for output:
-P1DIR @r 65 | P1DIR !r
+led1 led2 | p1dir set
 
-\ Toggle P1.0 with generic routine:
-: tog ( pin port -- ) dup @r rot ^ swap !r ;
-1 P1OUT tog
+\ Modify LEDs:
+led1 p1out set
+led2 p1out tgl
+led1 led2 | p1out clr
 ```
-
-**TODO:**
-- Build more useful words into the read-only dictionary.
-- Optimize to make more dictionary RAM available.
 
 ---
 
@@ -31,6 +31,6 @@ To update the read-only dictionary:
 4. Build zForth and run: `./zforth core.zf`.
 5. Save the dictionary and note new "latest" index: `131 sys latest @ .`.
 6. Convert dictionary to C header: `xxd -i zforth.save > core.h`; copy core.h back into the MSP430 build.
-7. Update core.h by adding the line `unsigned int zforth_save_latest = <the new "latest" index>;`, removing excess zero bytes from `zforth_save`, and updating `zforth_save_len` to reflect the new length.
+7. Update core.h by adding the line `unsigned int zforth_save_latest = <the new "latest" index>;`, removing excess zero bytes from `zforth_save`, and updating `zforth_save_len` to reflect the new length. Also, make all variables `static const`.
 8. Compile the MSP430 build and test.
 
