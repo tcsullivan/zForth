@@ -6,19 +6,22 @@ This specifically targets the MSP430G2553 or other MSP430 family members with at
 
 Satisfying these constraints primarily required adding a read-only dictionary that contains the bootstrap, core functionality (modified to better conform with ANS Forth), and other helpful words. MSP430 registers can also be referenced by name.
 
-Through these changes, zForth is made available over UART with 300 bytes of dictionary RAM and 12 cells each for the data and return stacks.
+Through these changes, zForth is made available over UART with over 256 bytes of dictionary RAM and 10 cells each for the data and return stacks.
 
 ```
-0x01 const led1
-0x40 const led2
+: led 1 p1out ;
+: btn 8 p1in ;
 
-\ Configure P1.0 and P1.6 for output:
-led1 led2 | p1dir set
+\ Configure LED (P1.0) for output:
+1 p1dir set
 
-\ Modify LEDs:
-led1 p1out set
-led2 p1out tgl
-led1 led2 | p1out clr
+\ Plan LED response to button:
+: act if set else clr then ;
+
+\ Do a little loop updating the LED:
+: act begin led btn tst act again ;
+act
+
 ```
 
 ---

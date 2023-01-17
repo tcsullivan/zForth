@@ -4,7 +4,7 @@
 : !    0 !! ;
 : @    0 @@ ;
 : ,    0 ,, ;
-: #    0 ## ;
+( : #    0 ## ; )
 
 
 ( compiler state )
@@ -18,10 +18,12 @@
 
 : emit  0 sys ;
 : .     1 sys ;
+: tell  2 sys ;
 : @r    128 sys ;
 : !r    129 sys ;
 : bye   130 sys ;
 : inv   131 sys ;
+: mem   132 sys ;
 
 
 ( register operations )
@@ -29,6 +31,7 @@
 : set dup @r rot | swap !r ;
 : clr dup @r rot inv & swap !r ;
 : tgl dup @r rot ^ swap !r ;
+: tst @r & ;
 
 
 ( some operators and shortcuts )
@@ -52,12 +55,27 @@
 : const : ' lit , , postpone ; ;
 : var   here 2 allot const ;
 
+
 ( 'begin' gets the current address, a jump or conditional jump back is generated
   by 'again', 'until' )
 
 : begin   here ; immediate
 : again   ' jmp , , ; immediate
 : until   ' jmp0 , , ; immediate
+
+
+( '{ ... ... ... n x}' repeat n times definition - eg. : 5hello { ." hello " 5 x} ; )
+
+: { ' lit , 0 , ' >r , here ; immediate
+: x} ' r> , ' 1+ , ' dup , ' >r , ' = , postpone until ' r> , ' drop , ; immediate
+
+
+( vectored execution - execute XT eg. ' hello exe )
+
+: exe ' lit , here dup , ' >r , ' >r , ' exit , here swap ! ; immediate
+
+( execute XT n times  e.g. ' hello 3 times )
+: times { >r dup >r exe r> r> dup x} drop drop ;
 
 
 ( 'if' prepares conditional jump, address will be filled in by 'else' or 'then' )
@@ -85,9 +103,10 @@
 
 ( Print string literal )
 
-( : ." compiling @ if postpone s" ' tell , else begin key dup 34 = if drop exit else emit then again )
-     ( then ; immediate )
+: ." compiling @ if postpone s" ' tell , else begin key dup 34 = if drop exit else emit then again then ; immediate
 
+
+." zforth  " mem . ." bytes" cr
 
 (
 vi: ts=3 sw=3 ft=forth

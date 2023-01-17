@@ -71,6 +71,8 @@ static uint8_t dict[ZF_DICT_SIZE];
 
 #if ZF_ENABLE_PREBUILT_BOOTSTRAP
 #include ZF_PREBUILT_BOOTSTRAP
+
+const zf_cell here_init = zforth_save_len + ZF_USERVAR_COUNT * sizeof(zf_addr);
 #endif
 
 /* State and stack and interpreter pointers */
@@ -101,9 +103,6 @@ static const char uservar_names[] =
 #endif
 
 static zf_addr *uservar = (zf_addr *)dict;
-
-static char *handle_char_start = NULL;
-static size_t handle_char_len = 0;
 
 
 /* Prototypes */
@@ -852,39 +851,31 @@ static void handle_word(const char *buf)
  * char to a deferred prim if it requested a character from the input stream
  */
 
-static void handle_char(char *buf, size_t i)
+static void handle_char(char c)
 {
+	static char buf[24];
+	static size_t len = 0;
+
 	if(input_state == ZF_INPUT_PASS_CHAR) {
 
 		input_state = ZF_INPUT_INTERPRET;
-		run(buf + i);
+		run(&c);
 
-        } else {
-                if (handle_char_start == NULL) {
-                    handle_char_start = buf;
-                    handle_char_len = 0;
-                }
+	} else if(c != '\0' && !isspace(c)) {
 
-                if (buf[i] == '\0') {
-                    if (handle_char_len > 0) {
-                        handle_char_start[handle_char_len] = '\0';
-                        handle_word(handle_char_start);
-                    }
-                    handle_char_start = NULL;
-                    handle_char_len = 0;
-                } else if (isspace((int)buf[i])) {
-                    if (handle_char_len > 0) {
-                        handle_char_start[handle_char_len] = '\0';
-                        handle_word(handle_char_start);
-                        handle_char_start[handle_char_len] = ' ';
-                        handle_char_start += handle_char_len;
-                        handle_char_len = 0;
-                    }
-                    handle_char_start ++;
-                } else {
-                    handle_char_len ++;
-	        }
-        }
+		if(len < sizeof(buf)-1) {
+			buf[len++] = c;
+			buf[len] = '\0';
+		}
+
+	} else {
+
+		if(len > 0) {
+			len = 0;
+			handle_word(buf);
+		}
+
+	}
 }
 
 
@@ -895,7 +886,7 @@ static void handle_char(char *buf, size_t i)
 void zf_init(int enable_trace)
 {
 #if ZF_ENABLE_PREBUILT_BOOTSTRAP
-	HERE = zforth_save_len + ZF_USERVAR_COUNT * sizeof(zf_addr);
+	HERE = here_init;
 	LATEST = zforth_save_latest;
 #else
 	HERE = ZF_USERVAR_COUNT * sizeof(zf_addr);
@@ -964,27 +955,25 @@ void zf_bootstrap(void) {}
  * Eval forth string
  */
 
-zf_result zf_eval(char *buf)
+zf_result zf_eval(const char *buf)
 {
 	zf_result r = (zf_result)setjmp(jmpbuf);
 
 	if(r == ZF_OK) {
-		for(size_t i = 0; ; ++i) {
-			handle_char(buf, i);
-			if(buf[i] == '\0') {
+		for(;;) {
+			handle_char(*buf);
+			if(*buf == '\0') {
 				return ZF_OK;
 			}
+			buf ++;
 		}
 	} else {
 		COMPILING = 0;
 		rsp = 0;
 		dsp = 0;
-                handle_char_start = NULL;
-                handle_char_len = 0;
 		return r;
 	}
 }
-
 
 void *zf_dump(size_t *len)
 {

@@ -111,38 +111,54 @@ zf_input_state zf_host_sys(zf_syscall_id id, const char *input)
 {
     (void)input;
 
+    extern const zf_cell here_init;
+
     static char buf[12];
 
     switch((int)id) {
-        case ZF_SYSCALL_EMIT:
-            serput(zf_pop());
-            break;
+    case ZF_SYSCALL_EMIT:
+        serput(zf_pop());
+        break;
 
-        case ZF_SYSCALL_PRINT:
-            printint(zf_pop(), buf);
-            break;
+    case ZF_SYSCALL_PRINT:
+        printint(zf_pop(), buf);
+        break;
 
-        case ZF_SYSCALL_USER + 0:
-            // byte peek
-            zf_push(*((uint8_t *)zf_pop()));
-            break;
+    case ZF_SYSCALL_TELL: {
+        zf_cell len = zf_pop();
+        const char *str = (const char *)zf_dump(NULL) + (int)zf_pop();
+        for (zf_cell i = 0; i < len; ++i)
+             serput(*str++);
+        } break;
 
-        case ZF_SYSCALL_USER + 1: {
-            // byte poke
-            uint8_t *p = (uint8_t *)zf_pop();
-            *p = (uint8_t)zf_pop();
-            } break;
+    case ZF_SYSCALL_USER + 0:
+        // byte peek
+        zf_push(*((uint8_t *)zf_pop()));
+        break;
 
-        case ZF_SYSCALL_USER + 2:
-            // reset zForth (clear RAM dictionary)
-            zf_init(0);
-	    zf_pushr(0);
-            break;
+    case ZF_SYSCALL_USER + 1: {
+        // byte poke
+        uint8_t *p = (uint8_t *)zf_pop();
+        *p = (uint8_t)zf_pop();
+        } break;
 
-        case ZF_SYSCALL_USER + 3:
-            // bitwise inversion
-            zf_push(-zf_pop() - 1);
-            break;
+    case ZF_SYSCALL_USER + 2:
+        // reset zForth (clear RAM dictionary)
+        zf_init(0);
+        zf_pushr(0);
+        break;
+
+    case ZF_SYSCALL_USER + 3:
+        // bitwise inversion
+        zf_push(-zf_pop() - 1);
+        break;
+
+    case ZF_SYSCALL_USER + 4: {
+        // free bytes remaining
+        zf_cell here;
+        zf_uservar_get(ZF_USERVAR_HERE, &here);
+        zf_push(here_init + ZF_DICT_SIZE - here);
+        } break;
     }
 
     return 0;
@@ -183,7 +199,7 @@ zf_cell zf_host_parse_num(const char *buf)
     bool neg = false;
 
     if (isalpha((int)buf[0]))
-	return lookup_reg(buf);
+        return lookup_reg(buf);
     else if (buf[0] == '0' && buf[1] == 'x')
         return zf_host_parse_num_hex(buf + 2);
     else if (buf[0] == '-')
@@ -208,8 +224,9 @@ zf_cell zf_host_parse_num(const char *buf)
 zf_cell lookup_reg(const char *buf)
 {
     const unsigned char *ptr = regs;
+
     while (*ptr) {
-	unsigned len = (unsigned)*ptr;
+        unsigned len = (unsigned)*ptr;
 
         if (memcmp(ptr + 1, buf, len) == 0 && buf[len] == '\0')
             return ptr[len + 1] | (ptr[len + 2] << 8);
@@ -223,32 +240,31 @@ zf_cell lookup_reg(const char *buf)
 
 zf_result do_eval(char *buf)
 {
-	const char *msg = NULL;
+    const char *msg = NULL;
 
-	zf_result rv = zf_eval(buf);
+    zf_result rv = zf_eval(buf);
 
-	switch(rv)
-	{
-		case ZF_OK: break;
-		case ZF_ABORT_INTERNAL_ERROR: msg = "internal error"; break;
-		case ZF_ABORT_OUTSIDE_MEM: msg = "outside memory"; break;
-		case ZF_ABORT_DSTACK_OVERRUN: msg = "dstack overrun"; break;
-		case ZF_ABORT_DSTACK_UNDERRUN: msg = "dstack underrun"; break;
-		case ZF_ABORT_RSTACK_OVERRUN: msg = "rstack overrun"; break;
-		case ZF_ABORT_RSTACK_UNDERRUN: msg = "rstack underrun"; break;
-		case ZF_ABORT_NOT_A_WORD: msg = "not a word"; break;
-		case ZF_ABORT_COMPILE_ONLY_WORD: msg = "compile-only word"; break;
-		case ZF_ABORT_INVALID_SIZE: msg = "invalid size"; break;
-		case ZF_ABORT_DIVISION_BY_ZERO: msg = "division by zero"; break;
-		default: msg = "unknown error";
-	}
+    switch (rv) {
+    case ZF_OK: break;
+    case ZF_ABORT_INTERNAL_ERROR: msg = "internal error"; break;
+    case ZF_ABORT_OUTSIDE_MEM: msg = "outside memory"; break;
+    case ZF_ABORT_DSTACK_OVERRUN: msg = "dstack overrun"; break;
+    case ZF_ABORT_DSTACK_UNDERRUN: msg = "dstack underrun"; break;
+    case ZF_ABORT_RSTACK_OVERRUN: msg = "rstack overrun"; break;
+    case ZF_ABORT_RSTACK_UNDERRUN: msg = "rstack underrun"; break;
+    case ZF_ABORT_NOT_A_WORD: msg = "not a word"; break;
+    case ZF_ABORT_COMPILE_ONLY_WORD: msg = "compile-only word"; break;
+    case ZF_ABORT_INVALID_SIZE: msg = "invalid size"; break;
+    case ZF_ABORT_DIVISION_BY_ZERO: msg = "division by zero"; break;
+    default: msg = "unknown error";
+    }
 
-	if(msg) {
-            serputs(msg);
-            serputs("\r\n");
-	}
+    if (msg) {
+        serputs(msg);
+        serputs("\r\n");
+    }
 
-	return rv;
+    return rv;
 }
 
 
