@@ -23,6 +23,7 @@ static void printint(int n, char *buf);
 static zf_cell lookup_reg(const char *buf);
 static zf_result do_eval(char *buf);
 
+// CANNOT RETURN
 int main(void)
 {
     static char buf[48];

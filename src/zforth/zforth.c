@@ -847,39 +847,6 @@ static void handle_word(const char *buf)
 
 
 /*
- * Handle one character. Split into words to pass to handle_word(), or pass the
- * char to a deferred prim if it requested a character from the input stream
- */
-
-static void handle_char(char c)
-{
-	static char buf[24];
-	static size_t len = 0;
-
-	if(input_state == ZF_INPUT_PASS_CHAR) {
-
-		input_state = ZF_INPUT_INTERPRET;
-		run(&c);
-
-	} else if(c != '\0' && !isspace(c)) {
-
-		if(len < sizeof(buf)-1) {
-			buf[len++] = c;
-			buf[len] = '\0';
-		}
-
-	} else {
-
-		if(len > 0) {
-			len = 0;
-			handle_word(buf);
-		}
-
-	}
-}
-
-
-/*
  * Initialisation
  */
 
@@ -955,17 +922,42 @@ void zf_bootstrap(void) {}
  * Eval forth string
  */
 
-zf_result zf_eval(const char *buf)
+zf_result zf_eval(char *buf)
 {
 	zf_result r = (zf_result)setjmp(jmpbuf);
 
 	if(r == ZF_OK) {
+                char *wrd = buf;
+	        size_t len = 0;
+
 		for(;;) {
-			handle_char(*buf);
-			if(*buf == '\0') {
-				return ZF_OK;
-			}
-			buf ++;
+                        char c = *buf++;
+
+			if(input_state == ZF_INPUT_PASS_CHAR) {
+
+	                	input_state = ZF_INPUT_INTERPRET;
+	                	run(&c);
+                                ++wrd;
+
+	                } else if(c != '\0' && !isspace(c)) {
+
+                		++len;
+
+	                } else {
+
+	                	if(len > 0) {
+                                        wrd[len] = '\0';
+	                		handle_word(wrd);
+                                        wrd[len] = ' ';
+                                        wrd += len + 1;
+	                		len = 0;
+	                	} else if(isspace(c)) {
+                                        ++wrd;
+                                }
+	                }
+
+                        if(c == '\0')
+			        return ZF_OK;
 		}
 	} else {
 		COMPILING = 0;
