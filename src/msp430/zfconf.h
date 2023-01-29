@@ -55,7 +55,7 @@ typedef uint16_t zf_addr;
 
 // highest stack usage: 90 bytes evaluating "' hey"
 // 512 - 90 = 422
-#define ZF_DICT_SIZE 294
+#define ZF_DICT_SIZE 16384//294
 #define ZF_DSTACK_SIZE 10
 #define ZF_RSTACK_SIZE 10
 

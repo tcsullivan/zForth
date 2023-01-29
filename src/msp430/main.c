@@ -3,14 +3,15 @@
  * Example zforth main app for msp430.
  */
 
+#include "i2c.h"
+#include "zforth.h"
+
 #include <msp430g2553.h>
 
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-
-#include "zforth.h"
 
 static const unsigned char *regs = (unsigned char *)
 #include "regs_data.h"
@@ -22,6 +23,16 @@ static void printint(int n, char *buf);
 
 static zf_cell lookup_reg(const char *buf);
 static zf_result do_eval(char *buf);
+
+void fram_read(zf_addr addr, char *buf, size_t len)
+{
+    I2C_Master_ReadReg(0x50, addr, (uint8_t *)buf, len);
+}
+
+void fram_write(zf_addr addr, char *buf, size_t len)
+{
+    I2C_Master_WriteReg(0x50, addr, (uint8_t *)buf, len);
+}
 
 // CANNOT RETURN
 int main(void)
@@ -42,6 +53,9 @@ int main(void)
     UCA0BR1 = 0;
     UCA0MCTL = UCBRS0;
     UCA0CTL1 &= (uint8_t)~UCSWRST;
+
+    i2c_init();
+    __enable_interrupt();
 
     zf_init(0);
 
@@ -160,6 +174,12 @@ zf_input_state zf_host_sys(zf_syscall_id id, const char *input)
         zf_uservar_get(ZF_USERVAR_HERE, &here);
         zf_push(here_init + ZF_DICT_SIZE - here);
         } break;
+
+    case ZF_SYSCALL_USER + 5:
+        // load here and latest
+        zf_uservar_set(ZF_USERVAR_HERE, zf_pop());
+        zf_uservar_set(ZF_USERVAR_LATEST, zf_pop());
+        break;
     }
 
     return 0;

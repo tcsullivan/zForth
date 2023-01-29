@@ -67,7 +67,7 @@ static const char prim_names[] =
 
 static zf_cell rstack[ZF_RSTACK_SIZE];
 static zf_cell dstack[ZF_DSTACK_SIZE];
-static uint8_t dict[ZF_DICT_SIZE];
+//static uint8_t dict[ZF_DICT_SIZE];
 
 #if ZF_ENABLE_PREBUILT_BOOTSTRAP
 #include ZF_PREBUILT_BOOTSTRAP
@@ -102,12 +102,12 @@ static const char uservar_names[] =
 	_("h")   _("latest") _("trace")  _("compiling")  _("_postpone");
 #endif
 
-static zf_addr *uservar = (zf_addr *)dict;
+static zf_addr uservar[ZF_USERVAR_COUNT];// = (zf_addr *)dict;
 
 
 /* Prototypes */
 
-static void do_prim(zf_prim prim, const char *input);
+static void do_prim(zf_prim prim, char *input);
 static zf_addr dict_get_cell(zf_addr addr, zf_cell *v);
 static void dict_get_bytes(zf_addr addr, void *buf, size_t len);
 
@@ -234,31 +234,23 @@ zf_cell zf_pickr(zf_addr n)
  * All access to dictionary memory is done through these functions.
  */
 
-static zf_addr dict_put_bytes(zf_addr addr, const void *buf, size_t len)
+static zf_addr dict_put_bytes(zf_addr addr, void *buf, size_t len)
 {
-	const uint8_t *p = (const uint8_t *)buf;
-	size_t i = len;
 #if ZF_ENABLE_PREBUILT_BOOTSTRAP
 	CHECK(addr >= zforth_save_len, ZF_ABORT_OUTSIDE_MEM);
 	CHECK(addr < zforth_save_len+ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
-        addr -= zforth_save_len;
+
+        extern void fram_write(zf_addr addr, char *buf, size_t len);
+        fram_write(addr - zforth_save_len, buf, len);
 #else
 	CHECK(addr < ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
-#endif
-	while(i--) dict[addr++] = *p++;
-	return len;
-}
 
-static const uint8_t *dict_get_addr(zf_addr addr)
-{
-#if ZF_ENABLE_PREBUILT_BOOTSTRAP
-        if (addr < zforth_save_len)
-            return zforth_save + addr;
-        else
-            return dict + addr - zforth_save_len;
-#else
-        return dict + addr;
+	const uint8_t *p = (const uint8_t *)buf;
+	size_t i = len;
+	while(i--) dict[addr++] = *p++;
 #endif
+
+	return len;
 }
 
 static void dict_get_bytes(zf_addr addr, void *buf, size_t len)
@@ -270,7 +262,20 @@ static void dict_get_bytes(zf_addr addr, void *buf, size_t len)
 	CHECK(addr < ZF_DICT_SIZE-len, ZF_ABORT_OUTSIDE_MEM);
 #endif
 
-        const uint8_t *daddr = dict_get_addr(addr);
+        const uint8_t *daddr;
+
+#if ZF_ENABLE_PREBUILT_BOOTSTRAP
+        if (addr >= zforth_save_len) {
+            extern void fram_read(zf_addr addr, char *buf, size_t len);
+            fram_read(addr - zforth_save_len, buf, len);
+            return;
+        } else {
+            daddr = zforth_save + addr;
+        }
+#else
+        daddr = dict + addr;
+#endif
+
         while(len--) {
             *p++ = *daddr++;
         }
@@ -417,7 +422,7 @@ static void dict_add_lit(zf_cell v)
 }
 
 
-static void dict_add_str(const char *s)
+static void dict_add_str(char *s)
 {
 	size_t l;
 	trace("\n+" ZF_ADDR_FMT " " ZF_ADDR_FMT " s '%s'", HERE, 0, s);
@@ -430,7 +435,7 @@ static void dict_add_str(const char *s)
  * Create new word, adjusting HERE and LATEST accordingly
  */
 
-static void create(const char *name, int flags)
+static void create(char *name, int flags)
 {
 	zf_addr here_prev;
 	trace("\n=== create '%s'", name);
@@ -447,6 +452,20 @@ static void create(const char *name, int flags)
  * Find word in dictionary, returning address and execution token
  */
 
+static int compare_word(const char *name, zf_addr addr, size_t len)
+{
+    char c;
+
+    while (len) {
+        dict_get_bytes(addr++, &c, 1);
+        if (*name++ != c)
+            break;
+        --len;
+    }
+
+    return len;
+}
+
 static int find_word(const char *name, zf_addr *word, zf_addr *code)
 {
 	zf_addr w = LATEST;
@@ -460,8 +479,7 @@ static int find_word(const char *name, zf_addr *word, zf_addr *code)
 		p += dict_get_cell(p, &link);
 		len = ZF_FLAG_LEN((int)d);
 		if(len == namelen) {
-                        const char *name2 = (const char *)dict_get_addr(p);
-			if(memcmp(name, name2, len) == 0) {
+			if(compare_word(name, p, len) == 0) {
 				*word = w;
 				*code = p + len;
 				return 1;
@@ -490,7 +508,7 @@ static void make_immediate(void)
  * Inner interpreter
  */
 
-static void run(const char *input)
+static void run(char *input)
 {
 	while(ip != 0) {
 		zf_cell d;
@@ -557,7 +575,7 @@ static zf_addr peek(zf_addr addr, zf_cell *val, int len)
  * Run primitive opcode
  */
 
-static void do_prim(zf_prim op, const char *input)
+static void do_prim(zf_prim op, char *input)
 {
 	zf_cell d1, d2, d3;
 	zf_addr addr, len;
@@ -792,7 +810,7 @@ static void do_prim(zf_prim op, const char *input)
  * deferred primitive if it requested a word from the input stream.
  */
 
-static void handle_word(const char *buf)
+static void handle_word(char *buf)
 {
 	zf_addr w, c = 0;
 	int found;
@@ -969,8 +987,10 @@ zf_result zf_eval(char *buf)
 
 void *zf_dump(size_t *len)
 {
-	if(len) *len = sizeof(dict);
-	return dict;
+	//if(len) *len = sizeof(dict);
+	//return dict;
+        (void)len;
+        return NULL;
 }
 
 zf_result zf_uservar_set(zf_uservar_id uv, zf_cell v)

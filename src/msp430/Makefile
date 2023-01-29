@@ -1,6 +1,6 @@
 
 BIN	:= zforth-msp430
-SRC	:= main.c zforth.c crt0.S
+SRC	:= main.c i2c.c zforth.c crt0.S
 
 OBJS    := $(subst .S,.o, $(subst .c,.o, $(SRC)))
 DEPS    := $(subst .S,.d, $(subst .c,.d, $(SRC)))
